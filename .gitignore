@@ -8,3 +8,4 @@ browser.json
 oauth.json
 dump.json
 response.json
+.idea/*
