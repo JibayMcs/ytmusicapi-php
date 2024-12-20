@@ -293,6 +293,7 @@ trait Browse
             $response,
             join(TWO_COLUMN_RENDERER, "secondaryContents", SECTION_LIST, 1, CAROUSEL)
         );
+
         if ($other_versions) {
             $album->other_versions = parse_content_list($other_versions->contents, "Ytmusicapi\\parse_album");
         }

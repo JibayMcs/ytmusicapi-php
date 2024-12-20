@@ -2,7 +2,6 @@
 
 namespace Ytmusicapi;
 
-use WpOrg\Requests\Utility\CaseInsensitiveDictionary as CaseInsensitiveDict;
 
 // This gets used before tests begin, so we can't test them directly
 // @codeCoverageIgnoreStart
@@ -135,6 +134,7 @@ function convert_string_to_cookies($cookiesStr)
         return new CaseInsensitiveDict((array)$cookiesStr);
     }
 
+
     $cookiesStr = trim($cookiesStr);
 
     if (!$cookiesStr || strpos($cookiesStr, "=") === false) {
@@ -146,16 +146,15 @@ function convert_string_to_cookies($cookiesStr)
     if (str_starts_with(strtolower($cookiesStr), "cookie: ")) {
         $cookiesStr = substr($cookiesStr, 8);
     }
-
     $cookiesStr = trim($cookiesStr);
 
     $split = explode("; ", $cookiesStr);
 
     foreach ($split as $value) {
         [$key, $val] = explode("=", $value);
-        $cookies[trim($key)] = trim($val);
+        $key = trim($key);
+        $cookies->set($key, trim($val));
     }
-
     return $cookies;
 }
 
@@ -167,7 +166,7 @@ function json_dump($object)
 function sapisid_from_cookie($raw_cookie)
 {
     $cookies = convert_string_to_cookies($raw_cookie);
-    return $cookies["__Secure-3PAPISID"];
+    return $cookies->getAll()["__Secure-3PAPISID"];
 }
 
 /**

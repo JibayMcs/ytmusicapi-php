@@ -71,7 +71,7 @@ class OAuthToken extends Token
         $members = Token::members();
 
         foreach ($members as $key) {
-            if (!isset($headers[$key])) {
+            if (!isset($headers->getAll()[$key])) {
                 return false;
             }
         }

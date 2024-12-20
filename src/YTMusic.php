@@ -2,6 +2,9 @@
 
 namespace Ytmusicapi;
 
+use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Support\Facades\Http;
+
 include "constants.php";
 include "exceptions.php";
 include "polyfills.php";
@@ -19,8 +22,6 @@ include_all("mixins");
 include_all("parsers");
 include_all("auth");
 include_all("types");
-
-use WpOrg\Requests\Utility\CaseInsensitiveDictionary as CaseInsensitiveDict;
 
 /**
  * Allows automated interactions with YouTube Music by emulating the YouTube web client's requests.
@@ -100,27 +101,30 @@ class YTMusic
         $location = "",
         $oauth_credentials = null
     ) {
-        $this->_base_headers = null; // for authless initializing requests during OAuth flow
-        $this->_headers = null; // cache formed headers including auth
+        $this->_base_headers = null;
+        $this->_headers = null;
 
-        $this->auth = $auth; // raw auth
-        $this->_input_dict = new CaseInsensitiveDict([]); // parsed auth arg value in dictionary format
+        $this->auth = $auth;
+        $this->_input_dict = new CaseInsensitiveDict([]);
 
         $this->auth_type = AuthType::UNAUTHORIZED;
         $this->proxies = $proxies;
 
-        if ($requests_session && $requests_session instanceof \WpOrg\Requests\Session) {
+        if ($requests_session && $requests_session instanceof PendingRequest) {
             $this->_session = $requests_session;
         } else {
-            $this->_session = new \WpOrg\Requests\Session();
-            $this->_session->options["timeout"] = 30;
+            $this->_session = Http::timeout(30);
+
             // I don't know why we don't do proxies here or just leave it out
             // and require a session to be passed in.
         }
 
-        // see google cookie docs: https://policies.google.com/technologies/cookies
-        //value from https://github.com/yt-dlp/yt-dlp/blob/master/yt_dlp/extractor/youtube.py#L502
+        // Initialise le client HTTP
+
+        // Configurer les cookies par défaut
         $this->cookies = ["SOCS" => "CAI"];
+
+        // Gérer l'authentification OAuth
         if ($this->auth) {
             $this->oauth_credentials = $oauth_credentials ?: new OAuthCredentials();
             $auth_filepath = null;
@@ -128,11 +132,10 @@ class YTMusic
                 $auth_str = $this->auth;
                 if (is_file($auth_str)) {
                     $auth_filepath = $auth_str;
-                    $input_json = json_decode(file_get_contents($auth_str));
+                    $input_json = json_decode(file_get_contents($auth_str), true);
                 } else {
-                    $input_json = json_decode($auth_str);
+                    $input_json = json_decode($auth_str, true);
                 }
-
                 $this->_input_dict = new CaseInsensitiveDict((array)$input_json);
             } else {
                 $this->_input_dict = new CaseInsensitiveDict($this->auth);
@@ -150,22 +153,18 @@ class YTMusic
             }
         }
 
-        // Prepare context
+        // Initialisation du contexte
         $this->context = initialize_context();
+        $this->context->client->hl = $language;
+        $this->language = $language;
 
-        // TODO: Location
-        // TODO: Language
-
-        $this->context->client->hl = "en";
-        $this->language = "en";
-
-        // For brand accounts
+        // Configuration des paramètres d'utilisateur
         if ($user) {
             $this->context->user->onBehalfOfUser = $user;
         }
 
-        $auth_headers = $this->_input_dict["authorization"];
-
+        // Gestion des en-têtes d'autorisation
+        $auth_headers = $this->_input_dict->getAll()["authorization"];
         if ($auth_headers) {
             if (str_contains($auth_headers, "SAPISIDHASH")) {
                 $this->auth_type = AuthType::BROWSER;
@@ -173,17 +172,16 @@ class YTMusic
                 $this->auth_type = AuthType::OAUTH_CUSTOM_FULL;
             }
         } elseif (is_string($auth)) {
-            // Check for cookie string passed in diretly
             if (strpos($auth, "__Secure-3PAPISID")) {
                 $this->auth_type = AuthType::BROWSER;
-                $this->_input_dict["cookie"] = $auth;
-                $this->_input_dict["x-goog-authuser"] = $user;
-                $this->_input_dict["origin"] = YTM_DOMAIN;
-                $this->_input_dict["user-agent"] = USER_AGENT;
-                $this->_input_dict["accept"] = "*/*";
-                $this->_input_dict["accept-encoding"] = "gzip, deflate";
-                $this->_input_dict["content-type"] = "application/json";
-                $this->_input_dict["content-encodng"] = "gzip";
+                $this->_input_dict->getAll()["cookie"] = $auth;
+                $this->_input_dict->getAll()["x-goog-authuser"] = $user;
+                $this->_input_dict->getAll()["origin"] = YTM_DOMAIN;
+                $this->_input_dict->getAll()["user-agent"] = USER_AGENT;
+                $this->_input_dict->getAll()["accept"] = "*/*";
+                $this->_input_dict->getAll()["accept-encoding"] = "gzip, deflate";
+                $this->_input_dict->getAll()["content-type"] = "application/json";
+                $this->_input_dict->getAll()["content-encoding"] = "gzip";
                 unset($this->context->user->onBehalfOfUser);
             }
         }
@@ -193,10 +191,10 @@ class YTMusic
         if ($this->auth_type === AuthType::BROWSER) {
             $this->base_headers();
             $this->params .= YTM_PARAMS_KEY;
-            $cookie = $this->_base_headers["cookie"] ?: "";
+            $cookie = $this->_base_headers->getAll()["cookie"] ?: "";
 
             $this->sapisid = sapisid_from_cookie($cookie);
-            $this->origin = $this->_base_headers["origin"] ?? $this->_base_headers["x-origin"];
+            $this->origin = $this->_base_headers->getAll()["origin"] ?? $this->_base_headers->getAll()["x-origin"];
 
             if (!$this->sapisid) {
                 throw new YTMusicUserError("Your cookie is missing the required value __Secure-3PAPISID");
@@ -232,15 +230,15 @@ class YTMusic
 
             // Seems to be needed for get_channel_episodes. I couldn't find any other endpoint
             // that required this. Go figure. I wonder if this is some sort of A/B testing thing.
-            $this->_headers["X-Goog-Visitor-Id"] = get_visitor_id(fn ($url) => $this->_send_get_request($url));
+            $this->_headers->getAll()["X-Goog-Visitor-Id"] = get_visitor_id(fn ($url) => $this->_send_get_request($url));
         }
 
         // keys updated each use, custom oauth implementations left untouched
         if ($this->auth_type === AuthType::BROWSER) {
-            $this->_headers["authorization"] = get_authorization($this->sapisid, $this->origin);
+            $this->_headers->getAll()["authorization"] = get_authorization($this->sapisid, $this->origin);
         } elseif (in_array($this->auth_type, AuthType::oauth_types()) && $this->auth_type !== AuthType::OAUTH_CUSTOM_FULL) {
-            $this->_headers["authorization"] = $this->_token->as_auth();
-            $this->_headers["X-Goog-Request-Time"] = strval(time());
+            $this->_headers->getAll()["authorization"] = $this->_token->as_auth();
+            $this->_headers->getAll()["X-Goog-Request-Time"] = strval(time());
         }
 
         if ($this->_headers instanceof CaseInsensitiveDict) {
@@ -269,18 +267,17 @@ class YTMusic
 
         $header = $this->header();
 
-        $response = $this->_session->post(
+        $response = Http::withHeaders(is_array($header) ? $header : [$header])->post(
             YTM_BASE_API . $endpoint . $this->params . $additionalParams,
-            $header,
-            json_encode($body),
-            $options
+            $body,
         );
 
-        $response_text = json_decode($response->body);
 
-        if ($response->status_code >= 400) {
+        $response_text = json_decode($response->getBody());
+
+        if ($response->getStatusCode() >= 400) {
             $reason = $response_text->error->message ?? "Unknown error";
-            $message = "Server returned HTTP " . $response->status_code . ": " . $reason . ".\n";
+            $message = "Server returned HTTP " . $response->getStatusCode() . ": " . $reason . ".\n";
             $error = $response_text->error->message;
             throw new YTMusicServerError($message . $error);
         }
@@ -312,8 +309,9 @@ class YTMusic
 
         $headers = $this->_headers ?: $this->base_headers();
 
-        $response = $this->_session->get($url, $headers, $options);
-        return $response->body;
+        $headers = $headers->getAll();
+        $response = $this->_session->withHeaders($headers)->get($url, $options);
+        return $response->getBody();
     }
 
     /**

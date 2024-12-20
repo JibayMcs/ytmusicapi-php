@@ -2,6 +2,8 @@
 
 namespace Ytmusicapi;
 
+use Illuminate\Support\Facades\Http;
+
 /**
  * Base class representation of the YouTubeMusicAPI OAuth Credentials
  */
@@ -60,77 +62,73 @@ class Credentials
  */
 class OAuthCredentials extends Credentials
 {
-    public $_session;
+    private $http_client;
 
     /**
      * @param string $client_id Optional. Set the GoogleAPI client_id used for auth flows.
      *   Requires client_secret also be provided if set.
      * @param string $client_secret Optional. Corresponding secret for provided client_id.
-     * @param \WpOrg\Requests\Session $session Optional. Connection pooling with an active session.
-     * @param array $proxies Optional. Modify the session with proxy parameters.
+     * @param array $proxies Optional. Proxy configuration.
      */
     public function __construct(
         $client_id = null,
         $client_secret = null,
-        $session = null,
         $proxies = null
     ) {
         if ($client_id !== null && $client_secret === null) {
             throw new \Exception("OAuthCredential init failure. Provide both client_id and client_secret or neither.");
         }
 
-        // bind instance to OAuth client for auth flows
         $this->client_id = $client_id ?: OAUTH_CLIENT_ID;
         $this->client_secret = $client_secret ?: OAUTH_CLIENT_SECRET;
 
-        $this->_session = $session ?: new \WpOrg\Requests\Session();
+        // Initialisation du client HTTP
+        $this->http_client = Http::timeout(30);
+
+        // Ajout des proxys si nécessaire
         if ($proxies) {
-            $this->_session->proxies = $proxies;
+            $this->http_client = $this->http_client->withOptions(['proxy' => $proxies]);
         }
     }
 
     /**
      * Method for obtaining a new user auth code. First step of token creation.
      *
-     * @return AuthCodeDict
+     * @return object
      */
     public function get_code()
     {
-        $code_response = $this->_send_request(OAUTH_CODE_URL, ["scope" => OAUTH_SCOPE]);
-        return json_decode($code_response->body);
+        $response = $this->_send_request(OAUTH_CODE_URL, ["scope" => OAUTH_SCOPE]);
+        return json_decode($response->body());
     }
 
     /**
-     * Method for sending post requests with required client_id and User-Agent modifications
+     * Method for sending POST requests with required client_id and User-Agent modifications
      *
      * @param string $url
      * @param array $data
-     * @return \WpOrg\Requests\Response
+     * @return \Illuminate\Http\Client\Response
      */
     public function _send_request($url, $data)
     {
         $data = (array)$data;
         $data["client_id"] = $this->client_id;
 
-        $response = $this->_session->post(
-            $url,
-            [ "User-Agent" => OAUTH_USER_AGENT ],
-            $data
-        );
+        $response = $this->http_client->post($url, $data);
 
-        if ($response->status_code === 401) {
-            $data = json_decode($response->body);
-            $issue = $data->error;
+        if ($response->status() === 401) {
+            $data = $response->json();
+            $issue = $data['error'] ?? 'unknown_error';
             if ($issue === "unauthorized_client") {
                 throw new UnauthorizedOAuthClient("Token refresh error. Most likely client/token mismatch.");
-            } elseif ($issue == "invalid_client") {
+            } elseif ($issue === "invalid_client") {
                 throw new BadOAuthClient(
                     "OAuth client failure. Most likely client_id and client_secret mismatch or "
                     . "YouTubeData API is not enabled."
                 );
             } else {
                 throw new YTMusicServerError(
-                    "OAuth request error. status_code: " . $response->status_code . ", url: " . $url . ", content: " . $response->body
+                    "OAuth request error. status_code: " . $response->status() . ", url: " . $url . ", content: " . $response->body()
                 );
             }
         }
@@ -152,7 +150,7 @@ class OAuthCredentials extends Credentials
             ]
         );
 
-        return json_decode($response->body);
+        return $response->json();
     }
 
     /**
@@ -160,7 +158,7 @@ class OAuthCredentials extends Credentials
      * Token must have been created by the same OAuth client.
      *
      * @param string $refresh_token Corresponding refresh_token for a matching access_token.
-     * @return BaseTokenDict
+     * @return array
      */
     public function refresh_token($refresh_token)
     {
@@ -172,6 +170,7 @@ class OAuthCredentials extends Credentials
                 "refresh_token" => $refresh_token
             ]
         );
-        return json_decode($response->body);
+
+        return $response->json();
     }
 }

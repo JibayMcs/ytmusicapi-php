@@ -11,7 +11,7 @@
 	"license": "MIT",
 	"require": {
 		"php": ">=7.4",
-		"rmccue/requests": "^2.0"
+		"illuminate/http": "v11.36.1"
 	},
 	"autoload": {
 		"psr-4": {

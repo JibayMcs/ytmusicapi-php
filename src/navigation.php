@@ -123,11 +123,14 @@ function nav($root, $items, $null_if_absent = false)
         if ($null_if_absent) {
             return null;
         } else {
-            throw new \Exception("Root is null");
+//            throw new \Exception("Root is null");
+            return null;
         }
     }
 
+
     foreach ($items as $k) {
+
         if (is_array($root)) {
             if ($k === "-1" || $k === -1) {
                 $root = end($root);
@@ -137,10 +140,12 @@ function nav($root, $items, $null_if_absent = false)
                 if ($null_if_absent) {
                     return null;
                 } else {
-                    throw new \Exception("Key not found: $k");
+                    //throw new \Exception("Key not found: $k");
+                    return null;
                 }
             }
         } else {
+
             if (property_exists($root, $k)) {
                 $root = $root->$k;
             } else {
@@ -149,7 +154,8 @@ function nav($root, $items, $null_if_absent = false)
                 } else {
                     print_r($root);
                     print_r(array_slice(debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS), 0, 2));
-                    throw new \Exception("Key not found: $k");
+                    //throw new \Exception("Key not found: $k");
+                    return null;
                 }
             }
         }
