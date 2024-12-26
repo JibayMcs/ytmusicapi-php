@@ -51,6 +51,9 @@ function parse_top_result($data, $search_result_types)
             $search_result['videoId'] = nav($on_tap, WATCH_VIDEO_ID);
             $search_result['videoType'] = nav($on_tap, NAVIGATION_VIDEO_TYPE);
             $search_result['title'] = nav($data, TITLE_TEXT);
+            $runs = nav($data, 'subtitle.runs');
+            $song_info = parse_song_runs(array_slice($runs, 2));
+            $search_result = array_merge($search_result, $song_info);
         }
     }
 
