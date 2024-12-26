@@ -50,10 +50,11 @@ function parse_top_result($data, $search_result_types)
         if ($on_tap) {
             $search_result['videoId'] = nav($on_tap, WATCH_VIDEO_ID);
             $search_result['videoType'] = nav($on_tap, NAVIGATION_VIDEO_TYPE);
+            $search_result['title'] = nav($data, TITLE_TEXT);
         }
     }
 
-    if (in_array($result_type, ['song', 'video', 'album'])) {
+    if (in_array($result_type, ['album'])) {
         $search_result['videoId'] = nav($data, ['onTap', WATCH_VIDEO_ID], true);
         $search_result['videoType'] = nav($data, ['onTap', NAVIGATION_VIDEO_TYPE], true);
 
