@@ -42,11 +42,12 @@ function parse_song_runs($runs)
             ];
 
             if ($item->id && (str_starts_with($item->id, 'MPRE')
-                || str_contains($item->id, "release_detail"))) { // album
+                    || str_contains($item->id, "release_detail"))) { // album
                 $parsed['album'] = $item;
             } else { // artist
                 $parsed['artists'][] = $item;
             }
+
         } else {
             // note: YT uses non-breaking space \xa0 to separate number and magnitude
             if (preg_match("/^\d([^ ])* [^ ]*$/", $text) && $i > 0) {
@@ -56,6 +57,10 @@ function parse_song_runs($runs)
                 $parsed['duration_seconds'] = parse_duration($text);
             } elseif (preg_match("/^\d{4}$/", $text)) {
                 $parsed['year'] = $text;
+            } elseif (str_contains($text, 'vues')) {
+                $parsed['views'] = explode(' ', $text)[0];
+            } elseif (str_contains($text, 'J\'aime')) {
+                $parsed['likeStatus'] = explode(' ', $text)[0];
             } else { // artist without id
                 $parsed['artists'][] = (object)['name' => $text, 'id' => null];
             }
