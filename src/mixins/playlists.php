@@ -54,11 +54,11 @@ trait Playlists
         }
 
         // [PHP Only] Attempt at getting author
-        $author = nav($header_data, join(RESPONSIVE_HEADER, "straplineTextOne.runs.0"), true);
+        $author = nav($header_data, join(RESPONSIVE_HEADER, "facepile.avatarStackViewModel"), true);
         if ($author) {
             $playlist["author"] = (object)[
-                "name" => $author->text,
-                "id" => nav($author, "navigationEndpoint.browseEndpoint.browseId", true),
+                "name" => $author->text->content,
+                "id" => nav($author, "rendererContext.commandContext.onTap.innertubeCommand.browseEndpoint.browseId", true),
             ];
         } else {
             $playlist["author"] = null;
