@@ -59,7 +59,7 @@ function parse_song_runs($runs)
                 $parsed['year'] = $text;
             } elseif (str_contains($text, 'vues')) {
                 $parsed['views'] = explode(' ', $text)[0];
-            } elseif (str_contains($text, 'J\'aime')) {
+            } elseif (str_contains($text, 'J\'aime') || str_contains($text, 'Like')) {
                 $parsed['likeStatus'] = explode(' ', $text)[0];
             } else { // artist without id
                 $parsed['artists'][] = (object)['name' => $text, 'id' => null];
